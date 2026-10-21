@@ -1,0 +1,10 @@
+# Documentation
+*.pdf
+
+bin/
+coverage.out
+
+# Go binaries built from the repo root (go build ./cmd/...)
+/server
+/client
+/gui
