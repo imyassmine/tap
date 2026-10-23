@@ -124,7 +124,7 @@ func main() {
 		} else {
 			tcpConn = conn
 			serverLogs += "\n[Success]: Connected to MUD server at " + address
-			
+
 			go func() {
 				reader := bufio.NewReader(tcpConn)
 				for {

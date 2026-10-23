@@ -1,81 +1,141 @@
 package main
 
 import (
-	"errors"
+	"bufio"
 	"io"
-	"log"
+	"log/slog"
 	"net"
+	"os"
 	"strings"
-
-	"tap/internal/protocol"
+	"sync"
+	"unicode"
+	"unicode/utf8"
 )
 
-const (
-	listenAddr = ":4242"
-	greeting   = "OK hello proto=1" // RFC 42TAP
-)
+const port = ":4242"
+const greeting = "OK hello proto=1"
+const maxLineSize = 1024
+
+type Server struct {
+	mtx     sync.Mutex
+	players map[string]net.Conn
+}
 
 func main() {
-	ln, err := net.Listen("tcp", listenAddr)
+	ln, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to start server", "port", port, "error", err)
+		os.Exit(1)
 	}
-	log.Printf("listening on %s", listenAddr)
+	defer ln.Close()
+	slog.Info("server listening", "port", port)
 
+	srv := new(Server)
+	srv.players = make(map[string]net.Conn)
 	for {
-		c, err := ln.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
-			log.Printf("accept: %v", err)
+			slog.Error("accept error", "error", err)
 			continue
 		}
-		go handle(c) // one goroutine per client
+		go srv.handleConn(conn)
 	}
 }
 
+func (s *Server) handleConn(conn net.Conn) {
+	defer conn.Close()
+	remote := conn.RemoteAddr().String()
+	name := ""
 
-func handle(c net.Conn) {
-	defer c.Close()
+	slog.Info("client connected", "remote", remote)
+	defer func() {
+		s.unregister(name)
+		slog.Info("client disconnected", "remote", remote, "player", name)
+	}()
 
-	if !send(c, greeting) {
+	send(conn, greeting)
+
+	scanner := bufio.NewScanner(conn)
+	buf := make([]byte, 0, maxLineSize)
+	scanner.Buffer(buf, maxLineSize)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			slog.Warn("empty line", "remote", remote)
+			continue
+		}
+		command, args, _ := strings.Cut(line, " ")
+		command = strings.ToUpper(command)
+		args = strings.TrimSpace(args)
+		slog.Info("command received", "remote", remote, "player", name,
+			"command", command, "args", args)
+
+		if name == "" && command != "CONNECT" && command != "QUIT" {
+			send(conn, "ERR 202 NOT_AUTHENTICATED")
+			continue
+		}
+
+		switch command {
+		case "CONNECT":
+			if name != "" || !validName(args) {
+				send(conn, "ERR 400 BAD_REQUEST")
+			} else if !s.register(args, conn) {
+				send(conn, "ERR 201 NAME_IN_USE")
+			} else {
+				name = args
+				slog.Info("player connected", "remote", remote, "player", name)
+				send(conn, "OK connected")
+			}
+		case "QUIT":
+			send(conn, "OK bye")
+			return
+		default:
+			send(conn, "ERR 400 BAD_REQUEST")
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Warn("read error", "remote", remote, "error", err)
+	}
+}
+
+func (s *Server) register(name string, conn net.Conn) bool {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if _, taken := s.players[name]; taken {
+		return false
+	}
+	s.players[name] = conn
+	return true
+}
+
+func (s *Server) unregister(name string) {
+	if name == "" {
 		return
 	}
-
-	lr := protocol.NewLineReader(c, protocol.DefaultMaxLine)
-	for {
-		line, err := lr.ReadLine()
-		if err != nil {
-			if perr, ok := protocol.AsError(err); ok {
-				send(c, protocol.ERR(perr))
-			} else if !errors.Is(err, io.EOF) {
-				log.Printf("read %s: %v", c.RemoteAddr(), err)
-			}
-			return
-		}
-
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-
-		cmd, err := protocol.ParseCommand(line)
-		if err != nil {
-			perr, ok := protocol.AsError(err)
-			if !ok {
-				perr = protocol.ErrUnknownCommand
-			}
-			if !send(c, protocol.ERR(perr)) {
-				return
-			}
-			continue
-		}
-
-		log.Printf("%s: %s %q (not implemented)", c.RemoteAddr(), cmd.Name, cmd.Args)
-		if !send(c, protocol.ERR(protocol.ErrUnknownCommand)) {
-			return
-		}
-	}
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	delete(s.players, name)
 }
 
-func send(c net.Conn, line string) bool {
-	_, err := io.WriteString(c, protocol.Encode(line))
-	return err == nil
+func validName(name string) bool {
+	if name == "" || !utf8.ValidString(name) {
+		return false
+	}
+	for _, r := range name {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func send(conn net.Conn, msg string) error {
+	remote := conn.RemoteAddr().String()
+	if _, err := io.WriteString(conn, msg+"\n"); err != nil {
+		slog.Warn("send failed", "remote", remote, "error", err)
+		return err
+	}
+	slog.Info("response sent", "remote", remote, "response", msg)
+	return nil
 }
