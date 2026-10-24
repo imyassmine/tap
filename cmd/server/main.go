@@ -22,6 +22,7 @@ type Server struct {
 }
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		slog.Error("failed to start server", "port", port, "error", err)
