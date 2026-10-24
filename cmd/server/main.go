@@ -10,6 +10,7 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+	"tap/internal/world"
 )
 
 const port = ":4242"
@@ -23,6 +24,13 @@ type Server struct {
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+	w, err := world.Load("data/world.json")
+	if err != nil {
+		slog.Error("failed to load world", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("world loaded", "rooms", len(w.Rooms), "items", len(w.Items), "npcs", len(w.NPCs))
+	
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		slog.Error("failed to start server", "port", port, "error", err)

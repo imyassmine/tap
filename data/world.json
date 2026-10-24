@@ -1,0 +1,46 @@
+{
+  "start": "loc.square",
+  "rooms": {
+    "loc.square": {
+      "name": "Village Square",
+      "description": "A bustling square with cobblestone paths.",
+      "exits": { "north": "loc.tavern", "east": "loc.shop" },
+      "npcs": ["npc.guard"]
+    },
+    "loc.tavern": {
+      "name": "The Prancing Pony",
+      "description": "A cozy tavern filled with warmth and laughter.",
+      "exits": { "south": "loc.square" },
+      "items": ["item.ale"]
+    },
+    "loc.shop": {
+      "name": "General Store",
+      "description": "Shelves lined with various goods and supplies.",
+      "exits": { "west": "loc.square" },
+      "npcs": ["npc.merchant"]
+    }
+  },
+  "items": {
+    "item.ale": {
+      "name": "Frothy Ale",
+      "description": "A refreshing drink that restores energy.",
+      "obtainable": true
+    }
+  },
+  "npcs": {
+    "npc.guard": {
+      "name": "Village Guard",
+      "description": "A stern-looking guard watching over the square.",
+      "dialogue": ["Stay safe, traveler.", "The roads can be dangerous."],
+      "hp": 20,
+      "hostile": false
+    },
+    "npc.merchant": {
+      "name": "Shop Keeper",
+      "description": "A friendly merchant eager to trade.",
+      "dialogue": ["Welcome to my shop!", "What can I get for you today?"],
+      "hp": 15,
+      "hostile": false
+    }
+  }
+}
