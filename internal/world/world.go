@@ -2,10 +2,10 @@ package world
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
-	"errors"
 )
 
 type Item struct {
@@ -50,8 +50,8 @@ func Load(path string) (*World, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if err := w.Validate(); err != nil {
-	return nil, fmt.Errorf("invalid world %s: %w", path, err)
-}
+		return nil, fmt.Errorf("invalid world %s: %w", path, err)
+	}
 	return &w, nil
 }
 

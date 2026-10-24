@@ -2,24 +2,61 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync"
+	"tap/internal/world"
 	"unicode"
 	"unicode/utf8"
-	"tap/internal/world"
 )
 
 const port = ":4242"
 const greeting = "OK hello proto=1"
 const maxLineSize = 1024
 
+type Player struct {
+	Name string
+	Conn net.Conn
+	Room string
+}
+
 type Server struct {
-	mtx     sync.Mutex
-	players map[string]net.Conn
+	mtx       sync.Mutex
+	world     *world.World
+	players   map[string]*Player
+	roomItems map[string][]string
+}
+
+type roomInfo struct {
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Exits       map[string]string `json:"exits"`
+}
+
+type lookReply struct {
+	Room    roomInfo `json:"room"`
+	Players []string `json:"players"`
+	Items   []string `json:"items"`
+	NPCs    []string `json:"npcs"`
+}
+
+func NewServer(w *world.World) *Server {
+	s := &Server{
+		world:     w,
+		players:   make(map[string]*Player),
+		roomItems: make(map[string][]string),
+	}
+	for id, r := range w.Rooms {
+		s.roomItems[id] = slices.Clone(r.Items)
+	}
+	return s
 }
 
 func main() {
@@ -30,7 +67,7 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("world loaded", "rooms", len(w.Rooms), "items", len(w.Items), "npcs", len(w.NPCs))
-	
+
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		slog.Error("failed to start server", "port", port, "error", err)
@@ -39,8 +76,7 @@ func main() {
 	defer ln.Close()
 	slog.Info("server listening", "port", port)
 
-	srv := new(Server)
-	srv.players = make(map[string]net.Conn)
+	srv := NewServer(w)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -109,6 +145,10 @@ func (s *Server) handleConn(conn net.Conn) {
 		case "QUIT":
 			_ = send(conn, "OK bye")
 			return
+		case "LOOK":
+			if err := send(conn, s.cmdLook(name, args)); err != nil {
+				return
+			}
 		default:
 			if err := send(conn, "ERR 400 BAD_REQUEST"); err != nil {
 				return
@@ -126,7 +166,7 @@ func (s *Server) register(name string, conn net.Conn) bool {
 	if _, taken := s.players[name]; taken {
 		return false
 	}
-	s.players[name] = conn
+	s.players[name] = &Player{Name: name, Conn: conn, Room: s.world.Start}
 	return true
 }
 
@@ -159,4 +199,52 @@ func send(conn net.Conn, msg string) error {
 	}
 	slog.Info("response sent", "remote", remote, "response", msg)
 	return nil
+}
+
+func (s *Server) cmdLook(name, args string) string {
+	if args != "" {
+		return "ERR 400 BAD_REQUEST" // LOOK ne prend aucun argument
+	}
+	data, err := s.lookJSON(name)
+	if err != nil {
+		slog.Error("look failed", "player", name, "error", err)
+		return "ERR 500 INTERNAL_ERROR"
+	}
+	return "OK " + string(data)
+}
+
+func (s *Server) lookJSON(name string) ([]byte, error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	p, ok := s.players[name]
+	if !ok {
+		return nil, fmt.Errorf("unknown player %q", name)
+	}
+	room := s.world.Rooms[p.Room]
+
+	players := []string{}
+	for _, other := range s.players {
+		if other.Room == p.Room {
+			players = append(players, other.Name)
+		}
+	}
+	slices.Sort(players)
+
+	exits := room.Exits
+	if exits == nil {
+		exits = map[string]string{}
+	}
+
+	return json.Marshal(lookReply{
+		Room: roomInfo{
+			ID:          p.Room,
+			Name:        room.Name,
+			Description: room.Description,
+			Exits:       exits,
+		},
+		Players: players,
+		Items:   append([]string{}, s.roomItems[p.Room]...),
+		NPCs:    append([]string{}, room.NPCs...),
+	})
 }
