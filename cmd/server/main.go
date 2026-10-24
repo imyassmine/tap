@@ -53,7 +53,9 @@ func (s *Server) handleConn(conn net.Conn) {
 		slog.Info("client disconnected", "remote", remote, "player", name)
 	}()
 
-	send(conn, greeting)
+	if err := send(conn, greeting); err != nil {
+		return
+	}
 
 	scanner := bufio.NewScanner(conn)
 	buf := make([]byte, 0, maxLineSize)
@@ -72,26 +74,36 @@ func (s *Server) handleConn(conn net.Conn) {
 			"command", command, "args", args)
 
 		if name == "" && command != "CONNECT" && command != "QUIT" {
-			send(conn, "ERR 202 NOT_AUTHENTICATED")
+			if err := send(conn, "ERR 202 NOT_AUTHENTICATED"); err != nil {
+				return
+			}
 			continue
 		}
 
 		switch command {
 		case "CONNECT":
 			if name != "" || !validName(args) {
-				send(conn, "ERR 400 BAD_REQUEST")
+				if err := send(conn, "ERR 400 BAD_REQUEST"); err != nil {
+					return
+				}
 			} else if !s.register(args, conn) {
-				send(conn, "ERR 201 NAME_IN_USE")
+				if err := send(conn, "ERR 201 NAME_IN_USE"); err != nil {
+					return
+				}
 			} else {
 				name = args
 				slog.Info("player connected", "remote", remote, "player", name)
-				send(conn, "OK connected")
+				if err := send(conn, "OK connected"); err != nil {
+					return
+				}
 			}
 		case "QUIT":
-			send(conn, "OK bye")
+			_ = send(conn, "OK bye")
 			return
 		default:
-			send(conn, "ERR 400 BAD_REQUEST")
+			if err := send(conn, "ERR 400 BAD_REQUEST"); err != nil {
+				return
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
