@@ -3,15 +3,18 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"tap/internal/world"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -19,11 +22,25 @@ import (
 const port = ":4242"
 const greeting = "OK hello proto=1"
 const maxLineSize = 1024
+const outQueueSize = 64
+const writeTimeout = 5 * time.Second
+const playerMaxHP = 100 // PDF 5.1 : les joueurs démarrent avec 100 HP
 
 type Player struct {
-	Name string
-	Conn net.Conn
-	Room string
+	Name      string
+	Room      string
+	Inventory []string
+	HP        int
+	MaxHP     int
+	out       chan string
+}
+
+func (p *Player) push(msg string) {
+	select {
+	case p.out <- msg:
+	default:
+		slog.Warn("outbound queue full, message dropped", "player", p.Name)
+	}
 }
 
 type Server struct {
@@ -31,6 +48,7 @@ type Server struct {
 	world     *world.World
 	players   map[string]*Player
 	roomItems map[string][]string
+	npcs      map[string]*NPCState
 }
 
 type roomInfo struct {
@@ -52,15 +70,21 @@ func NewServer(w *world.World) *Server {
 		world:     w,
 		players:   make(map[string]*Player),
 		roomItems: make(map[string][]string),
+		npcs:      make(map[string]*NPCState),
 	}
 	for id, r := range w.Rooms {
 		s.roomItems[id] = slices.Clone(r.Items)
+	}
+	for id, n := range w.NPCs {
+		s.npcs[id] = &NPCState{HP: n.HP, MaxHP: n.HP, Alive: true}
 	}
 	return s
 }
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+	handler := slog.NewJSONHandler(os.Stderr, nil)
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
 	w, err := world.Load("data/world.json")
 	if err != nil {
 		slog.Error("failed to load world", "error", err)
@@ -87,20 +111,40 @@ func main() {
 	}
 }
 
+func writeLoop(conn net.Conn, remote string, out <-chan string, done chan<- struct{}) {
+	defer close(done)
+	for msg := range out {
+		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+		if _, err := io.WriteString(conn, msg+"\n"); err != nil {
+			slog.Warn("send failed", "remote", remote, "error", err)
+			_ = conn.Close()
+			for range out {
+			}
+			return
+		}
+		slog.Info("response sent", "remote", remote, "response", msg)
+	}
+}
+
 func (s *Server) handleConn(conn net.Conn) {
-	defer conn.Close()
 	remote := conn.RemoteAddr().String()
 	name := ""
 
+	out := make(chan string, outQueueSize)
+	done := make(chan struct{})
+	go writeLoop(conn, remote, out, done)
+	reply := func(msg string) { out <- msg }
+
 	slog.Info("client connected", "remote", remote)
 	defer func() {
-		s.unregister(name)
+		s.unregister(name) // on retire le joueur (plus personne ne peut lui pousser de message)
+		close(out)         // on ferme la file
+		<-done             // on attend que tout ce qui était en file soit écrit
+		_ = conn.Close()   // on ferme la connexion
 		slog.Info("client disconnected", "remote", remote, "player", name)
 	}()
 
-	if err := send(conn, greeting); err != nil {
-		return
-	}
+	reply(greeting)
 
 	scanner := bufio.NewScanner(conn)
 	buf := make([]byte, 0, maxLineSize)
@@ -119,64 +163,108 @@ func (s *Server) handleConn(conn net.Conn) {
 			"command", command, "args", args)
 
 		if name == "" && command != "CONNECT" && command != "QUIT" {
-			if err := send(conn, "ERR 202 NOT_AUTHENTICATED"); err != nil {
-				return
-			}
+			reply("ERR 202 NOT_AUTHENTICATED")
 			continue
 		}
 
 		switch command {
 		case "CONNECT":
 			if name != "" || !validName(args) {
-				if err := send(conn, "ERR 400 BAD_REQUEST"); err != nil {
-					return
-				}
-			} else if !s.register(args, conn) {
-				if err := send(conn, "ERR 201 NAME_IN_USE"); err != nil {
-					return
-				}
+				reply("ERR 400 BAD_REQUEST")
+			} else if !s.register(args, out) {
+				reply("ERR 201 NAME_IN_USE")
 			} else {
 				name = args
 				slog.Info("player connected", "remote", remote, "player", name)
-				if err := send(conn, "OK connected"); err != nil {
-					return
-				}
+				reply("OK connected")
+				s.announceJoin(name)
 			}
 		case "QUIT":
-			_ = send(conn, "OK bye")
+			reply("OK bye")
 			return
 		case "LOOK":
-			if err := send(conn, s.cmdLook(name, args)); err != nil {
-				return
-			}
+			reply(s.cmdLook(name, args))
+		case "MOVE":
+			reply(s.cmdMove(name, args))
+		case "CHAT":
+			reply(s.cmdChat(name, args))
+		case "WHO":
+			reply(s.cmdWho(args))
+		case "TAKE":
+			reply(s.cmdTake(name, args))
+		case "DROP":
+			reply(s.cmdDrop(name, args))
+		case "INVENTORY":
+			reply(s.cmdInventory(name, args))
+		case "TALK":
+			reply(s.cmdTalk(name, args))
 		default:
-			if err := send(conn, "ERR 400 BAD_REQUEST"); err != nil {
-				return
-			}
+			reply("ERR 400 BAD_REQUEST")
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		slog.Warn("read error", "remote", remote, "error", err)
+		if errors.Is(err, bufio.ErrTooLong) {
+			reply("ERR 400 BAD_REQUEST")
+		}
 	}
 }
 
-func (s *Server) register(name string, conn net.Conn) bool {
+func (s *Server) pushRoomLocked(roomID, except, msg string) {
+	for _, p := range s.players {
+		if p.Room == roomID && p.Name != except {
+			p.push(msg)
+		}
+	}
+}
+
+func (s *Server) pushAllLocked(msg string) {
+	for _, p := range s.players {
+		p.push(msg)
+	}
+}
+
+func (s *Server) statsEventLocked() string {
+	return "EVT STATS players=" + strconv.Itoa(len(s.players))
+}
+
+func (s *Server) register(name string, out chan string) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	if _, taken := s.players[name]; taken {
 		return false
 	}
-	s.players[name] = &Player{Name: name, Conn: conn, Room: s.world.Start}
+	s.players[name] = &Player{
+		Name:  name,
+		Room:  s.world.Start,
+		HP:    playerMaxHP,
+		MaxHP: playerMaxHP,
+		out:   out,
+	}
 	return true
 }
 
-func (s *Server) unregister(name string) {
-	if name == "" {
-		return
-	}
+func (s *Server) announceJoin(name string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+	p, ok := s.players[name]
+	if !ok {
+		return
+	}
+	s.pushRoomLocked(p.Room, name, "EVT ROOM PRESENCE ENTER "+name)
+	s.pushAllLocked(s.statsEventLocked())
+}
+
+func (s *Server) unregister(name string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	player, ok := s.players[name]
+	if !ok {
+		return
+	}
 	delete(s.players, name)
+	s.pushRoomLocked(player.Room, "", "EVT ROOM PRESENCE LEAVE "+name)
+	s.pushAllLocked(s.statsEventLocked())
 }
 
 func validName(name string) bool {
@@ -191,60 +279,35 @@ func validName(name string) bool {
 	return true
 }
 
-func send(conn net.Conn, msg string) error {
-	remote := conn.RemoteAddr().String()
-	if _, err := io.WriteString(conn, msg+"\n"); err != nil {
-		slog.Warn("send failed", "remote", remote, "error", err)
-		return err
-	}
-	slog.Info("response sent", "remote", remote, "response", msg)
-	return nil
-}
-
-func (s *Server) cmdLook(name, args string) string {
-	if args != "" {
-		return "ERR 400 BAD_REQUEST" // LOOK ne prend aucun argument
-	}
-	data, err := s.lookJSON(name)
-	if err != nil {
-		slog.Error("look failed", "player", name, "error", err)
-		return "ERR 500 INTERNAL_ERROR"
-	}
-	return "OK " + string(data)
-}
-
 func (s *Server) lookJSON(name string) ([]byte, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	p, ok := s.players[name]
+	player, ok := s.players[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown player %q", name)
 	}
-	room := s.world.Rooms[p.Room]
-
+	room := s.world.Rooms[player.Room]
 	players := []string{}
 	for _, other := range s.players {
-		if other.Room == p.Room {
+		if other.Room == player.Room {
 			players = append(players, other.Name)
 		}
 	}
 	slices.Sort(players)
-
 	exits := room.Exits
 	if exits == nil {
 		exits = map[string]string{}
 	}
-
 	return json.Marshal(lookReply{
 		Room: roomInfo{
-			ID:          p.Room,
+			ID:          player.Room,
 			Name:        room.Name,
 			Description: room.Description,
 			Exits:       exits,
 		},
 		Players: players,
-		Items:   append([]string{}, s.roomItems[p.Room]...),
-		NPCs:    append([]string{}, room.NPCs...),
+		Items:   append([]string{}, s.roomItems[player.Room]...),
+		NPCs:    s.npcsInRoomLocked(player.Room),
 	})
 }

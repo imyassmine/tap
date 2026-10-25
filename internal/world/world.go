@@ -46,6 +46,7 @@ func Load(path string) (*World, error) {
 
 	var w World
 	decoder := json.NewDecoder(f)
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&w); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
