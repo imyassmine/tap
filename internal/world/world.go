@@ -62,24 +62,30 @@ func (w *World) Validate() error {
 	bad := func(format string, a ...any) {
 		errs = append(errs, fmt.Errorf(format, a...))
 	}
-	checkID := func(kind, id, prefix string) {
+	check := func(kind, id, prefix, name string) {
 		if !strings.HasPrefix(id, prefix) || strings.ContainsAny(id, " \t") {
 			bad("%s %q: id must start with %q and contain no space", kind, id, prefix)
+		}
+		if name == "" {
+			bad("%s %q: empty name", kind, id)
+		}
+	}
+	placed := map[string]string{}
+	place := func(kind, roomID, id string, exists bool) {
+		if !exists {
+			bad("room %q: unknown %s %q", roomID, kind, id)
+		} else if prev, dup := placed[id]; dup {
+			bad("%s %q is in both %q and %q (must be unique)", kind, id, prev, roomID)
+		} else {
+			placed[id] = roomID
 		}
 	}
 
 	if _, ok := w.Rooms[w.Start]; !ok {
 		bad("start room %q does not exist", w.Start)
 	}
-
-	itemIn := map[string]string{} // ID d'item -> salle où on l'a déjà vu
-	npcIn := map[string]string{}  // ID de NPC -> salle où on l'a déjà vu
-
 	for id, r := range w.Rooms {
-		checkID("room", id, "loc.")
-		if r.Name == "" {
-			bad("room %q: empty name", id)
-		}
+		check("room", id, "loc.", r.Name)
 		for dir, target := range r.Exits {
 			if dir == "" || dir != strings.ToLower(dir) || strings.ContainsAny(dir, " \t") {
 				bad("room %q: invalid direction %q (lowercase, no space)", id, dir)
@@ -89,36 +95,19 @@ func (w *World) Validate() error {
 			}
 		}
 		for _, it := range r.Items {
-			if _, ok := w.Items[it]; !ok {
-				bad("room %q: unknown item %q", id, it)
-			} else if prev, dup := itemIn[it]; dup {
-				bad("item %q is in both %q and %q (items must be unique)", it, prev, id)
-			} else {
-				itemIn[it] = id
-			}
+			_, ok := w.Items[it]
+			place("item", id, it, ok)
 		}
 		for _, n := range r.NPCs {
-			if _, ok := w.NPCs[n]; !ok {
-				bad("room %q: unknown npc %q", id, n)
-			} else if prev, dup := npcIn[n]; dup {
-				bad("npc %q is in both %q and %q", n, prev, id)
-			} else {
-				npcIn[n] = id
-			}
+			_, ok := w.NPCs[n]
+			place("npc", id, n, ok)
 		}
 	}
-
 	for id, it := range w.Items {
-		checkID("item", id, "item.")
-		if it.Name == "" {
-			bad("item %q: empty name", id)
-		}
+		check("item", id, "item.", it.Name)
 	}
 	for id, n := range w.NPCs {
-		checkID("npc", id, "npc.")
-		if n.Name == "" {
-			bad("npc %q: empty name", id)
-		}
+		check("npc", id, "npc.", n.Name)
 		if n.HP < 0 || (n.Hostile && n.HP == 0) {
 			bad("npc %q: invalid hp %d", id, n.HP)
 		}
