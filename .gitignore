@@ -1,3 +1,5 @@
 # Documentation
 *.pdf
 tap-serveur.md
+go-trainer/
+go.html

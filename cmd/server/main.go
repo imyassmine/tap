@@ -17,12 +17,13 @@ import (
 	"unicode/utf8"
 )
 
-const port = ":4242"
-const greeting = "OK hello proto=1"
-const maxLineSize = 1024
-const outQueueSize = 64
-const writeTimeout = 5 * time.Second
-const playerMaxHP = 100
+const (
+	port = ":4242"
+	greeting = "OK hello proto=1"
+	maxLineSize = 1024
+	writeTimeout = 5 * time.Second
+	playerMaxHP = 100
+)
 
 type Player struct {
 	Name      string
@@ -92,7 +93,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	remote := conn.RemoteAddr().String()
 	name := ""
 
-	out := make(chan string, outQueueSize)
+	out := make(chan string)
 	done := make(chan struct{})
 	go writeLoop(conn, remote, out, done)
 	reply := func(msg string) { out <- msg }
@@ -175,7 +176,6 @@ func (s *Server) handleConn(conn net.Conn) {
 func writeLoop(conn net.Conn, remote string, out <-chan string, done chan<- struct{}) {
 	defer close(done)
 	for msg := range out {
-		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		if _, err := io.WriteString(conn, msg+"\n"); err != nil {
 			slog.Warn("send failed", "remote", remote, "error", err)
 			_ = conn.Close()
@@ -205,7 +205,7 @@ func (player *Player) push(msg string) {
 	select {
 	case player.out <- msg:
 	default:
-		slog.Warn("outbound queue full, message dropped", "player", player.Name)
+		slog.Warn("message dropped", "player", player.Name)
 	}
 }
 
