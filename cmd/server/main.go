@@ -33,14 +33,6 @@ type Player struct {
 	out       chan string
 }
 
-func (player *Player) push(msg string) {
-	select {
-	case player.out <- msg:
-	default:
-		slog.Warn("outbound queue full, message dropped", "player", player.Name)
-	}
-}
-
 type Server struct {
 	mtx       sync.Mutex
 	world     *world.World
@@ -95,20 +87,6 @@ func main() {
 	}
 }
 
-func writeLoop(conn net.Conn, remote string, out <-chan string, done chan<- struct{}) {
-	defer close(done)
-	for msg := range out {
-		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-		if _, err := io.WriteString(conn, msg+"\n"); err != nil {
-			slog.Warn("send failed", "remote", remote, "error", err)
-			_ = conn.Close()
-			for range out {
-			}
-			return
-		}
-		slog.Info("response sent", "remote", remote, "response", msg)
-	}
-}
 
 func (s *Server) handleConn(conn net.Conn) {
 	remote := conn.RemoteAddr().String()
@@ -121,10 +99,10 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	slog.Info("client connected", "remote", remote)
 	defer func() {
-		s.unregister(name) // on retire le joueur (plus personne ne peut lui pousser de message)
-		close(out)         // on ferme la file
-		<-done             // on attend que tout ce qui était en file soit écrit
-		_ = conn.Close()   // on ferme la connexion
+		s.unregister(name)
+		close(out)
+		<-done
+		_ = conn.Close()
 		slog.Info("client disconnected", "remote", remote, "player", name)
 	}()
 
@@ -194,6 +172,21 @@ func (s *Server) handleConn(conn net.Conn) {
 	}
 }
 
+func writeLoop(conn net.Conn, remote string, out <-chan string, done chan<- struct{}) {
+	defer close(done)
+	for msg := range out {
+		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+		if _, err := io.WriteString(conn, msg+"\n"); err != nil {
+			slog.Warn("send failed", "remote", remote, "error", err)
+			_ = conn.Close()
+			for range out {
+			}
+			return
+		}
+		slog.Info("response sent", "remote", remote, "response", msg)
+	}
+}
+
 func (s *Server) pushRoomLocked(roomID, except, msg string) {
 	for _, p := range s.players {
 		if p.Room == roomID && p.Name != except {
@@ -205,6 +198,14 @@ func (s *Server) pushRoomLocked(roomID, except, msg string) {
 func (s *Server) pushAllLocked(msg string) {
 	for _, p := range s.players {
 		p.push(msg)
+	}
+}
+
+func (player *Player) push(msg string) {
+	select {
+	case player.out <- msg:
+	default:
+		slog.Warn("outbound queue full, message dropped", "player", player.Name)
 	}
 }
 
