@@ -2,9 +2,7 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -24,7 +22,7 @@ const greeting = "OK hello proto=1"
 const maxLineSize = 1024
 const outQueueSize = 64
 const writeTimeout = 5 * time.Second
-const playerMaxHP = 100 // PDF 5.1 : les joueurs démarrent avec 100 HP
+const playerMaxHP = 100
 
 type Player struct {
 	Name      string
@@ -35,11 +33,11 @@ type Player struct {
 	out       chan string
 }
 
-func (p *Player) push(msg string) {
+func (player *Player) push(msg string) {
 	select {
-	case p.out <- msg:
+	case player.out <- msg:
 	default:
-		slog.Warn("outbound queue full, message dropped", "player", p.Name)
+		slog.Warn("outbound queue full, message dropped", "player", player.Name)
 	}
 }
 
@@ -49,20 +47,6 @@ type Server struct {
 	players   map[string]*Player
 	roomItems map[string][]string
 	npcs      map[string]*NPCState
-}
-
-type roomInfo struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Exits       map[string]string `json:"exits"`
-}
-
-type lookReply struct {
-	Room    roomInfo `json:"room"`
-	Players []string `json:"players"`
-	Items   []string `json:"items"`
-	NPCs    []string `json:"npcs"`
 }
 
 func NewServer(w *world.World) *Server {
@@ -277,37 +261,4 @@ func validName(name string) bool {
 		}
 	}
 	return true
-}
-
-func (s *Server) lookJSON(name string) ([]byte, error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	player, ok := s.players[name]
-	if !ok {
-		return nil, fmt.Errorf("unknown player %q", name)
-	}
-	room := s.world.Rooms[player.Room]
-	players := []string{}
-	for _, other := range s.players {
-		if other.Room == player.Room {
-			players = append(players, other.Name)
-		}
-	}
-	slices.Sort(players)
-	exits := room.Exits
-	if exits == nil {
-		exits = map[string]string{}
-	}
-	return json.Marshal(lookReply{
-		Room: roomInfo{
-			ID:          player.Room,
-			Name:        room.Name,
-			Description: room.Description,
-			Exits:       exits,
-		},
-		Players: players,
-		Items:   append([]string{}, s.roomItems[player.Room]...),
-		NPCs:    s.npcsInRoomLocked(player.Room),
-	})
 }

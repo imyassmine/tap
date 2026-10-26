@@ -26,13 +26,13 @@ install:
 				@go mod download
 
 run-server:
-				@go run -race $(SERVER_PKG) $(ARGS)
+				@go run -race $(SERVER_PKG)
 
 run-client:
-				@go run -race $(CLIENT_PKG) $(ARGS)
+				@go run -race $(CLIENT_PKG)
 
 run-client-gui:
-				@go run -race $(GUI_PKG) $(ARGS)
+				@go run -race $(GUI_PKG)
 
 clean:
 				$(call ANIMATION,Removing binaries and caches)
@@ -56,9 +56,9 @@ help:
 				@printf "Usage: make [target]\n"
 				@printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
 				@printf "$(CYAN)install$(DEFAULT)		- Download dependencies\n"
-				@printf "$(CYAN)run-server$(DEFAULT)		- Run the server (use ARGS=\"<args>\" to pass arguments)\n"
-				@printf "$(CYAN)run-client$(DEFAULT)		- Run the CLI client (use ARGS=\"<args>\" to pass arguments)\n"
-				@printf "$(CYAN)run-client-gui$(DEFAULT)	- Run the GUI client (use ARGS=\"<args>\" to pass arguments)\n"
+				@printf "$(CYAN)run-server$(DEFAULT)		- Run the server\n"
+				@printf "$(CYAN)run-client$(DEFAULT)		- Run the CLI client\n"
+				@printf "$(CYAN)run-client-gui$(DEFAULT)	- Run the GUI client\n"
 				@printf "$(CYAN)clean$(DEFAULT)		- Remove built binaries and test cache\n"
 				@printf "$(CYAN)fmt$(DEFAULT)		- Format all Go files with gofmt\n"
 				@printf "$(CYAN)lint$(DEFAULT)		- Check gofmt formatting and run go vet\n"

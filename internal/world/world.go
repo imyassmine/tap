@@ -3,23 +3,14 @@ package world
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
-	"strings"
 )
 
-type Item struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Obtainable  bool   `json:"obtainable"`
-}
-
-type NPC struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Dialogue    []string `json:"dialogue"`
-	HP          int      `json:"hp"`
-	Hostile     bool     `json:"hostile"`
+type World struct {
+	Start string          `json:"start"`
+	Rooms map[string]Room `json:"rooms"`
+	Items map[string]Item `json:"items"`
+	NPCs  map[string]NPC  `json:"npcs"`
 }
 
 type Room struct {
@@ -30,11 +21,18 @@ type Room struct {
 	NPCs        []string          `json:"npcs"`
 }
 
-type World struct {
-	Start string          `json:"start"`
-	Rooms map[string]Room `json:"rooms"`
-	Items map[string]Item `json:"items"`
-	NPCs  map[string]NPC  `json:"npcs"`
+type Item struct {
+	Name        string `jspn:"name"`
+	Description string `json:"description"`
+	Obtainable  bool   `json:"obtainable"`
+}
+
+type NPC struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Dialogue    []string `json:"dialogue"`
+	HP          int      `json:"hp"`
+	Hostile     bool     `json:"hostile"`
 }
 
 func Load(path string) (*World, error) {
@@ -48,68 +46,34 @@ func Load(path string) (*World, error) {
 	decoder := json.NewDecoder(f)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&w); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, err
 	}
 	if err := w.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid world %s: %w", path, err)
+		return nil, err
 	}
 	return &w, nil
 }
 
-// Validate vérifie la cohérence du monde et renvoie TOUTES les erreurs d'un coup.
-func (w *World) Validate() error {
+func (world *World) Validate() error {
 	var errs []error
-	bad := func(format string, a ...any) {
-		errs = append(errs, fmt.Errorf(format, a...))
+	if _, ok := world.Rooms[world.Start]; !ok {
+		errs = append(errs, errors.New("start room does not exist"))
 	}
-	check := func(kind, id, prefix, name string) {
-		if !strings.HasPrefix(id, prefix) || strings.ContainsAny(id, " \t") {
-			bad("%s %q: id must start with %q and contain no space", kind, id, prefix)
-		}
-		if name == "" {
-			bad("%s %q: empty name", kind, id)
-		}
-	}
-	placed := map[string]string{}
-	place := func(kind, roomID, id string, exists bool) {
-		if !exists {
-			bad("room %q: unknown %s %q", roomID, kind, id)
-		} else if prev, dup := placed[id]; dup {
-			bad("%s %q is in both %q and %q (must be unique)", kind, id, prev, roomID)
-		} else {
-			placed[id] = roomID
-		}
-	}
-
-	if _, ok := w.Rooms[w.Start]; !ok {
-		bad("start room %q does not exist", w.Start)
-	}
-	for id, r := range w.Rooms {
-		check("room", id, "loc.", r.Name)
-		for dir, target := range r.Exits {
-			if dir == "" || dir != strings.ToLower(dir) || strings.ContainsAny(dir, " \t") {
-				bad("room %q: invalid direction %q (lowercase, no space)", id, dir)
-			}
-			if _, ok := w.Rooms[target]; !ok {
-				bad("room %q: exit %q leads to unknown room %q", id, dir, target)
+	for _, room := range world.Rooms {
+		for _, target := range room.Exits {
+			if _, ok := world.Rooms[target]; !ok {
+				errs = append(errs, errors.New("exit doesn't lead to an existing room"))
 			}
 		}
-		for _, it := range r.Items {
-			_, ok := w.Items[it]
-			place("item", id, it, ok)
+		for _, itemID := range room.Items {
+			if _, ok := world.Items[itemID]; !ok {
+				errs = append(errs, errors.New("item does not exist"))
+			}
 		}
-		for _, n := range r.NPCs {
-			_, ok := w.NPCs[n]
-			place("npc", id, n, ok)
-		}
-	}
-	for id, it := range w.Items {
-		check("item", id, "item.", it.Name)
-	}
-	for id, n := range w.NPCs {
-		check("npc", id, "npc.", n.Name)
-		if n.HP < 0 || (n.Hostile && n.HP == 0) {
-			bad("npc %q: invalid hp %d", id, n.HP)
+		for _, npcID := range room.NPCs {
+			if _, ok := world.NPCs[npcID]; !ok {
+				errs = append(errs, errors.New("NPC does not exist"))
+			}
 		}
 	}
 	return errors.Join(errs...)
