@@ -49,7 +49,7 @@ lint-strict:	lint
 				@golangci-lint run ./...
 
 test:
-				@go test -race ./... -v
+				@go test -race -v ./...
 
 
 help:
