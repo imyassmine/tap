@@ -4,26 +4,93 @@
     "loc.square": {
       "name": "Village Square",
       "description": "A bustling square with cobblestone paths.",
-      "exits": { "north": "loc.tavern", "east": "loc.shop" },
+      "exits": {
+        "north": "loc.tavern",
+        "east": "loc.shop",
+        "west": "loc.well"
+      },
       "npcs": ["npc.guard"]
     },
     "loc.tavern": {
       "name": "The Prancing Pony",
       "description": "A cozy tavern filled with warmth and laughter.",
-      "exits": { "south": "loc.square" },
-      "items": ["item.ale"]
+      "exits": {
+        "south": "loc.square",
+        "east": "loc.cellar"
+      },
+      "items": ["item.ale"],
+      "npcs": ["npc.baker"]
     },
     "loc.shop": {
       "name": "General Store",
       "description": "Shelves lined with various goods and supplies.",
-      "exits": { "west": "loc.square" },
+      "exits": {
+        "west": "loc.square",
+        "north": "loc.storage"
+      },
+      "items": ["item.bread"],
       "npcs": ["npc.merchant"]
+    },
+    "loc.cellar": {
+      "name": "Dark Cellar",
+      "description": "A dark underground cellar beneath the tavern.",
+      "exits": {
+        "west": "loc.tavern"
+      },
+      "items": ["item.key"]
+    },
+    "loc.storage": {
+      "name": "Shop Storage",
+      "description": "A dusty backroom filled with crates.",
+      "exits": {
+        "south": "loc.shop",
+        "east": "loc.alley"
+      }
+    },
+    "loc.alley": {
+      "name": "Dark Alley",
+      "description": "A narrow, shadowy alleyway behind the shops.",
+      "exits": {
+        "west": "loc.storage",
+        "south": "loc.square"
+      },
+      "items": ["item.herbs"]
+    },
+    "loc.well": {
+      "name": "Old Wishing Well",
+      "description": "An ancient stone well covered in moss.",
+      "exits": {
+        "east": "loc.square",
+        "north": "loc.garden"
+      }
+    },
+    "loc.garden": {
+      "name": "Quiet Garden",
+      "description": "A peaceful garden with blooming flowers.",
+      "exits": {
+        "south": "loc.well"
+      }
     }
   },
   "items": {
     "item.ale": {
       "name": "Frothy Ale",
       "description": "A refreshing drink that restores energy.",
+      "obtainable": true
+    },
+    "item.bread": {
+      "name": "Loaf of Bread",
+      "description": "Freshly baked warm bread.",
+      "obtainable": true
+    },
+    "item.key": {
+      "name": "Rusty Key",
+      "description": "An old iron key that might open something important.",
+      "obtainable": true
+    },
+    "item.herbs": {
+      "name": "Healing Herbs",
+      "description": "Green medicinal herbs used for treating wounds.",
       "obtainable": true
     }
   },
@@ -41,6 +108,27 @@
       "dialogue": ["Welcome to my shop!", "What can I get for you today?"],
       "hp": 15,
       "hostile": false
+    },
+    "npc.baker": {
+      "name": "Master Baker",
+      "description": "A flour-dusted baker smelling of sweet pastries.",
+      "dialogue": ["Try my fresh bread!", "Have you seen my lost key in the cellar?"],
+      "hp": 25,
+      "hostile": false
+    }
+  },
+  "quests": {
+    "quest.baker": {
+      "title": "The Baker's Key",
+      "description": "Find and bring the rusty key back from the cellar.",
+      "target": "item.key",
+      "reward": "item.bread"
+    },
+    "quest.herbs": {
+      "title": "Gathering Herbs",
+      "description": "Collect healing herbs from the dark alley.",
+      "target": "item.herbs",
+      "reward": "item.ale"
     }
   }
 }

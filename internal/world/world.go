@@ -7,10 +7,11 @@ import (
 )
 
 type World struct {
-	Start string          `json:"start"`
-	Rooms map[string]Room `json:"rooms"`
-	Items map[string]Item `json:"items"`
-	NPCs  map[string]NPC  `json:"npcs"`
+	Start  string           `json:"start"`
+	Rooms  map[string]Room  `json:"rooms"`
+	Items  map[string]Item  `json:"items"`
+	NPCs   map[string]NPC   `json:"npcs"`
+	Quests map[string]Quest `json:"quests"`
 }
 
 type Room struct {
@@ -22,7 +23,7 @@ type Room struct {
 }
 
 type Item struct {
-	Name        string `jspn:"name"`
+	Name        string `json:"name"`
 	Description string `json:"description"`
 	Obtainable  bool   `json:"obtainable"`
 }
@@ -33,6 +34,13 @@ type NPC struct {
 	Dialogue    []string `json:"dialogue"`
 	HP          int      `json:"hp"`
 	Hostile     bool     `json:"hostile"`
+}
+
+type Quest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Target      string `json:"target"`
+	Reward      string `json:"reward"`
 }
 
 func Load(path string) (*World, error) {

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
-	"slices"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"slices"
 )
 
 type lookReply struct {
@@ -32,7 +32,6 @@ func (s *Server) cmdLook(name, args string) string {
 	}
 	return "OK " + string(data)
 }
-
 
 func (s *Server) lookJSON(name string) ([]byte, error) {
 	s.mtx.Lock()

@@ -18,11 +18,11 @@ import (
 )
 
 const (
-	port = ":4242"
-	greeting = "OK hello proto=1"
-	maxLineSize = 1024
+	port         = ":4242"
+	greeting     = "OK hello proto=1"
+	maxLineSize  = 1024
 	writeTimeout = 5 * time.Second
-	playerMaxHP = 100
+	playerMaxHP  = 100
 )
 
 type Player struct {
@@ -87,7 +87,6 @@ func main() {
 		go srv.handleConn(conn)
 	}
 }
-
 
 func (s *Server) handleConn(conn net.Conn) {
 	remote := conn.RemoteAddr().String()
@@ -159,6 +158,10 @@ func (s *Server) handleConn(conn net.Conn) {
 			reply(s.cmdDrop(name, args))
 		case "INVENTORY":
 			reply(s.cmdInventory(name, args))
+		case "QUESTS":
+			reply(s.cmdQuests(name, args))
+		case "QUEST":
+			reply(s.cmdQuest(name, args))
 		case "TALK":
 			reply(s.cmdTalk(name, args))
 		default:
