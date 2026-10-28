@@ -5,10 +5,11 @@ import (
 	"log/slog"
 )
 
-func (s *Server) cmdQuests(name, args string) string {
+func (s *Server) cmdQuests(p *Player, args string) string {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
+	name := p.Name
 	_, ok := s.players[name]
 	if !ok {
 		slog.Error("quests failed: unknown player", "player", name)
@@ -29,7 +30,7 @@ func (s *Server) cmdQuests(name, args string) string {
 	return "OK " + string(data)
 }
 
-func (s *Server) cmdQuest(name, args string) string {
+func (s *Server) cmdQuest(p *Player, args string) string {
 	query := normalize(args)
 	if query == "" {
 		return "ERR 400 BAD_REQUEST"
@@ -37,6 +38,7 @@ func (s *Server) cmdQuest(name, args string) string {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
+	name := p.Name
 	_, ok := s.players[name]
 	if !ok {
 		slog.Error("quest failed: unknown player", "player", name)
