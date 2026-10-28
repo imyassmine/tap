@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"tap/internal/world"
-	"time"
 	"unicode"
 	"unicode/utf8"
 )
