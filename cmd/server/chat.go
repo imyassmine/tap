@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log/slog"
 	"strconv"
 	"strings"
 	"unicode"
@@ -26,7 +25,7 @@ func (s *Server) cmdWho(args string) string {
 	return "OK players=" + strconv.Itoa(len(s.players))
 }
 
-func (s *Server) cmdChat(name, args string) string {
+func (s *Server) cmdChat(p *Player, args string) string {
 	scope, text, _ := strings.Cut(args, " ")
 	scope = strings.ToUpper(scope)
 	text = cleanText(text)
@@ -37,12 +36,7 @@ func (s *Server) cmdChat(name, args string) string {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	p, ok := s.players[name]
-	if !ok {
-		slog.Error("chat failed: unknown player", "player", name)
-		return "ERR 500 INTERNAL_ERROR"
-	}
-	evt := "EVT " + scope + " CHAT " + name + " " + text
+	evt := "EVT " + scope + " CHAT " + p.Name + " " + text
 	if scope == "GLOBAL" {
 		s.pushAllLocked(evt)
 	} else {

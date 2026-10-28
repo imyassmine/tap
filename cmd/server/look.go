@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"slices"
 )
@@ -21,30 +20,26 @@ type roomInfo struct {
 	Exits       map[string]string `json:"exits"`
 }
 
-func (s *Server) cmdLook(name, args string) string {
+func (s *Server) cmdLook(p *Player, args string) string {
 	if args != "" {
 		return "ERR 400 BAD_REQUEST"
 	}
-	data, err := s.lookJSON(name)
+	data, err := s.lookJSON(p)
 	if err != nil {
-		slog.Error("look failed", "player", name, "error", err)
+		slog.Error("look failed", "player", p.Name, "error", err)
 		return "ERR 500 INTERNAL_ERROR"
 	}
 	return "OK " + string(data)
 }
 
-func (s *Server) lookJSON(name string) ([]byte, error) {
+func (s *Server) lookJSON(p *Player) ([]byte, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	player, ok := s.players[name]
-	if !ok {
-		return nil, fmt.Errorf("unknown player %q", name)
-	}
-	room := s.world.Rooms[player.Room]
+	room := s.world.Rooms[p.Room]
 	players := []string{}
 	for _, other := range s.players {
-		if other.Room == player.Room {
+		if other.Room == p.Room {
 			players = append(players, other.Name)
 		}
 	}
@@ -55,13 +50,13 @@ func (s *Server) lookJSON(name string) ([]byte, error) {
 	}
 	return json.Marshal(lookReply{
 		Room: roomInfo{
-			ID:          player.Room,
+			ID:          p.Room,
 			Name:        room.Name,
 			Description: room.Description,
 			Exits:       exits,
 		},
 		Players: players,
-		Items:   append([]string{}, s.roomItems[player.Room]...),
-		NPCs:    s.npcsInRoomLocked(player.Room),
+		Items:   append([]string{}, s.roomItems[p.Room]...),
+		NPCs:    s.npcsInRoomLocked(p.Room),
 	})
 }

@@ -18,7 +18,7 @@ func normalize(args string) string {
 	return strings.Join(strings.Fields(args), " ")
 }
 
-func (s *Server) cmdTake(name, args string) string {
+func (s *Server) cmdTake(p *Player, args string) string {
 	query := normalize(args)
 	if query == "" {
 		return "ERR 400 BAD_REQUEST"
@@ -26,11 +26,6 @@ func (s *Server) cmdTake(name, args string) string {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	p, ok := s.players[name]
-	if !ok {
-		slog.Error("take failed: unknown player", "player", name)
-		return "ERR 500 INTERNAL_ERROR"
-	}
 	items := s.roomItems[p.Room]
 	for i, id := range items {
 		def := s.world.Items[id]
@@ -42,13 +37,13 @@ func (s *Server) cmdTake(name, args string) string {
 		}
 		s.roomItems[p.Room] = slices.Delete(items, i, i+1)
 		p.Inventory = append(p.Inventory, id)
-		slog.Info("item taken", "player", name, "item", id, "room", p.Room)
+		slog.Info("item taken", "player", p.Name, "item", id, "room", p.Room)
 		return "OK taken=" + id
 	}
 	return "ERR 404 ITEM_NOT_FOUND"
 }
 
-func (s *Server) cmdDrop(name, args string) string {
+func (s *Server) cmdDrop(p *Player, args string) string {
 	query := normalize(args)
 	if query == "" {
 		return "ERR 400 BAD_REQUEST"
@@ -56,38 +51,28 @@ func (s *Server) cmdDrop(name, args string) string {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	p, ok := s.players[name]
-	if !ok {
-		slog.Error("drop failed: unknown player", "player", name)
-		return "ERR 500 INTERNAL_ERROR"
-	}
 	for i, id := range p.Inventory {
 		if !matchRef(query, id, s.world.Items[id].Name) {
 			continue
 		}
 		p.Inventory = slices.Delete(p.Inventory, i, i+1)
 		s.roomItems[p.Room] = append(s.roomItems[p.Room], id)
-		slog.Info("item dropped", "player", name, "item", id, "room", p.Room)
+		slog.Info("item dropped", "player", p.Name, "item", id, "room", p.Room)
 		return "OK dropped=" + id
 	}
 	return "ERR 404 ITEM_NOT_IN_INVENTORY"
 }
 
-func (s *Server) cmdInventory(name, args string) string {
+func (s *Server) cmdInventory(p *Player, args string) string {
 	if args != "" {
 		return "ERR 400 BAD_REQUEST"
 	}
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	p, ok := s.players[name]
-	if !ok {
-		slog.Error("inventory failed: unknown player", "player", name)
-		return "ERR 500 INTERNAL_ERROR"
-	}
 	data, err := json.Marshal(append([]string{}, p.Inventory...))
 	if err != nil {
-		slog.Error("inventory failed", "player", name, "error", err)
+		slog.Error("inventory failed", "player", p.Name, "error", err)
 		return "ERR 500 INTERNAL_ERROR"
 	}
 	return "OK " + string(data)

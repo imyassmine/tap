@@ -91,6 +91,9 @@ func main() {
 func (s *Server) handleConn(conn net.Conn) {
 	remote := conn.RemoteAddr().String()
 	name := ""
+	// p reste nil tant que CONNECT n'a pas réussi : toute autre commande est
+	// alors refusée, donc les cmdXxx reçoivent toujours un joueur enregistré.
+	var p *Player
 
 	out := make(chan string)
 	done := make(chan struct{})
@@ -99,7 +102,9 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	slog.Info("client connected", "remote", remote)
 	defer func() {
-		s.unregister(name)
+		if p != nil {
+			s.unregister(p)
+		}
 		close(out)
 		<-done
 		_ = conn.Close()
@@ -124,46 +129,46 @@ func (s *Server) handleConn(conn net.Conn) {
 		slog.Info("command received", "remote", remote, "player", name,
 			"command", command, "args", args)
 
-		if name == "" && command != "CONNECT" && command != "QUIT" {
+		if p == nil && command != "CONNECT" && command != "QUIT" {
 			reply("ERR 202 NOT_AUTHENTICATED")
 			continue
 		}
 
 		switch command {
 		case "CONNECT":
-			if name != "" || !validName(args) {
+			if p != nil || !validName(args) {
 				reply("ERR 400 BAD_REQUEST")
-			} else if !s.register(args, out) {
+			} else if p = s.register(args, out); p == nil {
 				reply("ERR 201 NAME_IN_USE")
 			} else {
-				name = args
+				name = p.Name
 				slog.Info("player connected", "remote", remote, "player", name)
 				reply("OK connected")
-				s.announceJoin(name)
+				s.announceJoin(p)
 			}
 		case "QUIT":
 			reply("OK bye")
 			return
 		case "LOOK":
-			reply(s.cmdLook(name, args))
+			reply(s.cmdLook(p, args))
 		case "MOVE":
-			reply(s.cmdMove(name, args))
+			reply(s.cmdMove(p, args))
 		case "CHAT":
-			reply(s.cmdChat(name, args))
+			reply(s.cmdChat(p, args))
 		case "WHO":
 			reply(s.cmdWho(args))
 		case "TAKE":
-			reply(s.cmdTake(name, args))
+			reply(s.cmdTake(p, args))
 		case "DROP":
-			reply(s.cmdDrop(name, args))
+			reply(s.cmdDrop(p, args))
 		case "INVENTORY":
-			reply(s.cmdInventory(name, args))
+			reply(s.cmdInventory(p, args))
 		case "QUESTS":
-			reply(s.cmdQuests(name, args))
+			reply(s.cmdQuests(p, args))
 		case "QUEST":
-			reply(s.cmdQuest(name, args))
+			reply(s.cmdQuest(p, args))
 		case "TALK":
-			reply(s.cmdTalk(name, args))
+			reply(s.cmdTalk(p, args))
 		default:
 			reply("ERR 400 BAD_REQUEST")
 		}
@@ -179,6 +184,7 @@ func (s *Server) handleConn(conn net.Conn) {
 func writeLoop(conn net.Conn, remote string, out <-chan string, done chan<- struct{}) {
 	defer close(done)
 	for msg := range out {
+		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		if _, err := io.WriteString(conn, msg+"\n"); err != nil {
 			slog.Warn("send failed", "remote", remote, "error", err)
 			_ = conn.Close()
@@ -216,42 +222,36 @@ func (s *Server) statsEventLocked() string {
 	return "EVT STATS players=" + strconv.Itoa(len(s.players))
 }
 
-func (s *Server) register(name string, out chan string) bool {
+// register renvoie le joueur créé, ou nil si le nom est déjà pris.
+func (s *Server) register(name string, out chan string) *Player {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	if _, taken := s.players[name]; taken {
-		return false
+		return nil
 	}
-	s.players[name] = &Player{
+	p := &Player{
 		Name:  name,
 		Room:  s.world.Start,
 		HP:    playerMaxHP,
 		MaxHP: playerMaxHP,
 		out:   out,
 	}
-	return true
+	s.players[name] = p
+	return p
 }
 
-func (s *Server) announceJoin(name string) {
+func (s *Server) announceJoin(p *Player) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	p, ok := s.players[name]
-	if !ok {
-		return
-	}
-	s.pushRoomLocked(p.Room, name, "EVT ROOM PRESENCE ENTER "+name)
+	s.pushRoomLocked(p.Room, p.Name, "EVT ROOM PRESENCE ENTER "+p.Name)
 	s.pushAllLocked(s.statsEventLocked())
 }
 
-func (s *Server) unregister(name string) {
+func (s *Server) unregister(p *Player) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	player, ok := s.players[name]
-	if !ok {
-		return
-	}
-	delete(s.players, name)
-	s.pushRoomLocked(player.Room, "", "EVT ROOM PRESENCE LEAVE "+name)
+	delete(s.players, p.Name)
+	s.pushRoomLocked(p.Room, "", "EVT ROOM PRESENCE LEAVE "+p.Name)
 	s.pushAllLocked(s.statsEventLocked())
 }
 
