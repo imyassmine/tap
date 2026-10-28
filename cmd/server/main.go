@@ -21,7 +21,6 @@ const (
 	port         = ":4242"
 	greeting     = "OK hello proto=1"
 	maxLineSize  = 1024
-	writeTimeout = 5 * time.Second
 	playerMaxHP  = 100
 )
 
@@ -169,6 +168,8 @@ func (s *Server) handleConn(conn net.Conn) {
 			reply(s.cmdQuest(p, args))
 		case "TALK":
 			reply(s.cmdTalk(p, args))
+		case "ATTACK":
+			reply(s.cmdAttack(p, args))
 		default:
 			reply("ERR 400 BAD_REQUEST")
 		}
@@ -184,7 +185,6 @@ func (s *Server) handleConn(conn net.Conn) {
 func writeLoop(conn net.Conn, remote string, out <-chan string, done chan<- struct{}) {
 	defer close(done)
 	for msg := range out {
-		_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		if _, err := io.WriteString(conn, msg+"\n"); err != nil {
 			slog.Warn("send failed", "remote", remote, "error", err)
 			_ = conn.Close()

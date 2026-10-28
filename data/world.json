@@ -54,7 +54,8 @@
         "west": "loc.storage",
         "south": "loc.square"
       },
-      "items": ["item.herbs"]
+      "items": ["item.herbs"],
+      "npcs": ["npc.goblin"]
     },
     "loc.well": {
       "name": "Old Wishing Well",
@@ -115,6 +116,13 @@
       "dialogue": ["Try my fresh bread!", "Have you seen my lost key in the cellar?"],
       "hp": 25,
       "hostile": false
+    },
+    "npc.goblin": {
+      "name": "Goblin",
+      "description": "A hostile creature lurking in the dark alley.",
+      "dialogue": [],
+      "hp": 30,
+      "hostile": true
     }
   },
   "quests": {
