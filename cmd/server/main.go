@@ -257,6 +257,11 @@ func (s *Server) unregister(p *Player) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	delete(s.players, p.Name)
+	if len(p.Inventory) > 0 {
+		s.roomItems[p.Room] = append(s.roomItems[p.Room], p.Inventory...)
+		slog.Info("inventory dropped on disconnect", "player", p.Name, "room", p.Room, "items", p.Inventory)
+		p.Inventory = nil
+	}
 	s.pushRoomLocked(p.Room, "", "EVT ROOM PRESENCE LEAVE "+p.Name)
 	s.pushAllLocked(s.statsEventLocked())
 }
