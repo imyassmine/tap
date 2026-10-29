@@ -17,19 +17,20 @@ import (
 )
 
 const (
-	port         = ":4242"
-	greeting     = "OK hello proto=1"
-	maxLineSize  = 1024
-	playerMaxHP  = 100
+	port        = ":4242"
+	greeting    = "OK hello proto=1"
+	maxLineSize = 1024
+	playerMaxHP = 100
 )
 
 type Player struct {
-	Name      string
-	Room      string
-	Inventory []string
-	HP        int
-	MaxHP     int
-	out       chan string
+	Name        string
+	Room        string
+	Inventory   []string
+	HP          int
+	MaxHP       int
+	IsDefending bool
+	out         chan string
 }
 
 type Server struct {
@@ -169,6 +170,12 @@ func (s *Server) handleConn(conn net.Conn) {
 			reply(s.cmdTalk(p, args))
 		case "ATTACK":
 			reply(s.cmdAttack(p, args))
+		case "STATUS":
+			reply(s.cmdStatus(p, args))
+		case "DEFEND":
+			reply(s.cmdDefend(p, args))
+		case "FLEE":
+			reply(s.cmdFlee(p, args))
 		default:
 			reply("ERR 400 BAD_REQUEST")
 		}
