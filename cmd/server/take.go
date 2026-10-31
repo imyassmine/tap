@@ -7,10 +7,7 @@ import (
 )
 
 func matchRef(query, id, name string) bool {
-	_, short, _ := strings.Cut(id, ".")
-	return strings.EqualFold(query, id) ||
-		strings.EqualFold(query, short) ||
-		strings.EqualFold(query, name)
+	return strings.EqualFold(query, id) || strings.EqualFold(query, name)
 }
 
 func (s *Server) cmdTake(p *Player, args string) string {

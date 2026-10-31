@@ -15,7 +15,6 @@ type Group struct {
 func (s *Server) cmdGroup(p *Player, args string) string {
 	sub, text, _ := strings.Cut(args, " ")
 	sub = strings.ToUpper(sub)
-	text = cleanText(text)
 	switch sub {
 	case "CREATE":
 		return s.cmdGroupCreate(p, text)

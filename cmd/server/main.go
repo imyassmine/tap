@@ -228,10 +228,6 @@ func (player *Player) push(msg string) {
 	}
 }
 
-func (s *Server) statsEventLocked() string {
-	return "EVT STATS players=" + strconv.Itoa(len(s.players))
-}
-
 // register renvoie le joueur créé, ou nil si le nom est déjà pris.
 func (s *Server) register(name string, out chan string) *Player {
 	s.mtx.Lock()
@@ -254,7 +250,7 @@ func (s *Server) announceJoin(p *Player) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.pushRoomLocked(p.Room, p.Name, "EVT ROOM PRESENCE ENTER "+p.Name)
-	s.pushAllLocked(s.statsEventLocked())
+	s.pushAllLocked("EVT STATS players=" + strconv.Itoa(len(s.players)))
 }
 
 func (s *Server) unregister(p *Player) {
@@ -273,7 +269,7 @@ func (s *Server) unregister(p *Player) {
 		s.pushGroupLocked(g, "EVT GROUP LEAVE "+p.Name)
 	}
 	s.pushRoomLocked(p.Room, "", "EVT ROOM PRESENCE LEAVE "+p.Name)
-	s.pushAllLocked(s.statsEventLocked())
+	s.pushAllLocked("EVT STATS players=" + strconv.Itoa(len(s.players)))
 }
 
 func validName(name string) bool {
