@@ -31,8 +31,7 @@ func (s *Server) cmdQuests(p *Player, args string) string {
 }
 
 func (s *Server) cmdQuest(p *Player, args string) string {
-	query := normalize(args)
-	if query == "" {
+	if args == "" {
 		return "ERR 400 BAD_REQUEST"
 	}
 	s.mtx.Lock()
@@ -45,7 +44,7 @@ func (s *Server) cmdQuest(p *Player, args string) string {
 		return "ERR 500 INTERNAL_ERROR"
 	}
 
-	quest, ok := s.world.Quests[query]
+	quest, ok := s.world.Quests[args]
 	if !ok {
 		return "ERR 404 QUEST_NOT_FOUND"
 	}

@@ -13,13 +13,8 @@ func matchRef(query, id, name string) bool {
 		strings.EqualFold(query, name)
 }
 
-func normalize(args string) string {
-	return strings.Join(strings.Fields(args), " ")
-}
-
 func (s *Server) cmdTake(p *Player, args string) string {
-	query := normalize(args)
-	if query == "" {
+	if args == "" {
 		return "ERR 400 BAD_REQUEST"
 	}
 	s.mtx.Lock()
@@ -28,7 +23,7 @@ func (s *Server) cmdTake(p *Player, args string) string {
 	items := s.roomItems[p.Room]
 	for i, id := range items {
 		def := s.world.Items[id]
-		if !matchRef(query, id, def.Name) {
+		if !matchRef(args, id, def.Name) {
 			continue
 		}
 		if !def.Obtainable {

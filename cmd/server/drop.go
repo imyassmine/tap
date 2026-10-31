@@ -6,15 +6,14 @@ import (
 )
 
 func (s *Server) cmdDrop(p *Player, args string) string {
-	query := normalize(args)
-	if query == "" {
+	if args == "" {
 		return "ERR 400 BAD_REQUEST"
 	}
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	for i, id := range p.Inventory {
-		if !matchRef(query, id, s.world.Items[id].Name) {
+		if !matchRef(args, id, s.world.Items[id].Name) {
 			continue
 		}
 		p.Inventory = slices.Delete(p.Inventory, i, i+1)

@@ -6,8 +6,7 @@ import (
 )
 
 func (s *Server) cmdTalk(p *Player, args string) string {
-	query := normalize(args)
-	if query == "" {
+	if args == "" {
 		return "ERR 400 BAD_REQUEST"
 	}
 	s.mtx.Lock()
@@ -15,7 +14,7 @@ func (s *Server) cmdTalk(p *Player, args string) string {
 
 	for _, id := range s.npcsInRoomLocked(p.Room) {
 		npc := s.world.NPCs[id]
-		if !matchRef(query, id, npc.Name) {
+		if !matchRef(args, id, npc.Name) {
 			continue
 		}
 		line := "..."

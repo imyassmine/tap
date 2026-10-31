@@ -42,8 +42,7 @@ func (s *Server) cmdDefend(p *Player, args string) string {
 }
 
 func (s *Server) cmdAttack(p *Player, args string) string {
-	query := normalize(args)
-	if query == "" {
+	if args == "" {
 		return "ERR 400 BAD_REQUEST"
 	}
 
@@ -53,7 +52,7 @@ func (s *Server) cmdAttack(p *Player, args string) string {
 	room := s.world.Rooms[p.Room]
 	for _, id := range room.NPCs {
 		state, ok := s.npcs[id]
-		if !ok || !state.Alive || !matchRef(query, id, s.world.NPCs[id].Name) {
+		if !ok || !state.Alive || !matchRef(args, id, s.world.NPCs[id].Name) {
 			continue
 		}
 		npcDef := s.world.NPCs[id]
