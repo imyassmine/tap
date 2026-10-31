@@ -17,7 +17,6 @@ func cleanText(text string) string {
 
 func (s *Server) cmdChat(p *Player, args string) string {
 	scope, text, _ := strings.Cut(args, " ")
-	scope = strings.ToUpper(scope)
 	text = cleanText(text)
 	if text == "" {
 		return "ERR 400 BAD_REQUEST"

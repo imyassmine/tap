@@ -84,5 +84,10 @@ func (world *World) Validate() error {
 			}
 		}
 	}
+	for _, npc := range world.NPCs {
+		if len(npc.Dialogue) == 0 {
+			errs = append(errs, errors.New("NPC has no dialogue"))
+		}
+	}
 	return errors.Join(errs...)
 }

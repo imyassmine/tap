@@ -16,20 +16,16 @@ func (s *Server) cmdTake(p *Player, args string) string {
 	}
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-
 	items := s.roomItems[p.Room]
-	for i, id := range items {
-		def := s.world.Items[id]
-		if !matchRef(args, id, def.Name) {
-			continue
-		}
-		if !def.Obtainable {
-			return "ERR 404 ITEM_NOT_FOUND"
-		}
-		s.roomItems[p.Room] = slices.Delete(items, i, i+1)
-		p.Inventory = append(p.Inventory, id)
-		slog.Info("item taken", "player", p.Name, "item", id, "room", p.Room)
-		return "OK taken=" + id
+	i := slices.IndexFunc(items, func(id string) bool {
+		return matchRef(args, id, s.world.Items[id].Name)
+	})
+	if i == -1 || !s.world.Items[items[i]].Obtainable {
+		return "ERR 404 ITEM_NOT_FOUND"
 	}
-	return "ERR 404 ITEM_NOT_FOUND"
+	id := items[i]
+	s.roomItems[p.Room] = slices.Delete(items, i, i+1)
+	p.Inventory = append(p.Inventory, id)
+	slog.Info("item taken", "player", p.Name, "item", id, "room", p.Room)
+	return "OK taken=" + id
 }

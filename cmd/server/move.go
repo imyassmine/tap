@@ -1,9 +1,6 @@
 package main
 
-import (
-	"log/slog"
-	"strings"
-)
+import "log/slog"
 
 func (s *Server) cmdMove(p *Player, args string) string {
 	if args == "" {
@@ -11,9 +8,8 @@ func (s *Server) cmdMove(p *Player, args string) string {
 	}
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-
 	from := p.Room
-	target, ok := s.world.Rooms[from].Exits[strings.ToLower(args)]
+	target, ok := s.world.Rooms[from].Exits[args]
 	if !ok {
 		return "ERR 301 NO_EXIT"
 	}

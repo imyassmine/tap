@@ -34,6 +34,12 @@ type Player struct {
 	Group       *Group
 }
 
+type NPCState struct {
+	HP    int
+	MaxHP int
+	Alive bool
+}
+
 type Server struct {
 	mtx         sync.Mutex
 	world       *world.World

@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"math/rand"
+	"slices"
 )
 
 func (s *Server) cmdTalk(p *Player, args string) string {
@@ -11,18 +12,16 @@ func (s *Server) cmdTalk(p *Player, args string) string {
 	}
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-
-	for _, id := range s.npcsInRoomLocked(p.Room) {
-		npc := s.world.NPCs[id]
-		if !matchRef(args, id, npc.Name) {
-			continue
-		}
-		line := "..."
-		if len(npc.Dialogue) > 0 {
-			line = npc.Dialogue[rand.Intn(len(npc.Dialogue))]
-		}
-		slog.Info("npc talk", "player", p.Name, "npc", id)
-		return "OK " + cleanText(line)
+	npcs := s.npcsInRoomLocked(p.Room)
+	i := slices.IndexFunc(npcs, func(id string) bool {
+		return matchRef(args, id, s.world.NPCs[id].Name)
+	})
+	if i == -1 {
+		return "ERR 404 NPC_NOT_FOUND"
 	}
-	return "ERR 404 NPC_NOT_FOUND"
+	id := npcs[i]
+	npc := s.world.NPCs[id]
+	line := npc.Dialogue[rand.Intn(len(npc.Dialogue))]
+	slog.Info("npc talk", "player", p.Name, "npc", id)
+	return "OK " + cleanText(line)
 }

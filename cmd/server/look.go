@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log/slog"
 	"slices"
 )
 
@@ -24,18 +23,8 @@ func (s *Server) cmdLook(p *Player, args string) string {
 	if args != "" {
 		return "ERR 400 BAD_REQUEST"
 	}
-	data, err := s.lookJSON(p)
-	if err != nil {
-		slog.Error("look failed", "player", p.Name, "error", err)
-		return "ERR 500 INTERNAL_ERROR"
-	}
-	return "OK " + string(data)
-}
-
-func (s *Server) lookJSON(p *Player) ([]byte, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-
 	room := s.world.Rooms[p.Room]
 	players := []string{}
 	for _, other := range s.players {
@@ -48,7 +37,7 @@ func (s *Server) lookJSON(p *Player) ([]byte, error) {
 	if exits == nil {
 		exits = map[string]string{}
 	}
-	return json.Marshal(lookReply{
+	data, _ := json.Marshal(lookReply{
 		Room: roomInfo{
 			ID:          p.Room,
 			Name:        room.Name,
@@ -59,4 +48,15 @@ func (s *Server) lookJSON(p *Player) ([]byte, error) {
 		Items:   append([]string{}, s.roomItems[p.Room]...),
 		NPCs:    s.npcsInRoomLocked(p.Room),
 	})
+	return "OK " + string(data)
+}
+
+func (s *Server) npcsInRoomLocked(roomID string) []string {
+	npcs := []string{}
+	for _, id := range s.world.Rooms[roomID].NPCs {
+		if st, ok := s.npcs[id]; ok && st.Alive {
+			npcs = append(npcs, id)
+		}
+	}
+	return npcs
 }
