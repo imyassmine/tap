@@ -31,14 +31,16 @@ type Player struct {
 	MaxHP       int
 	IsDefending bool
 	out         chan string
+	Group       *Group
 }
 
 type Server struct {
-	mtx       sync.Mutex
-	world     *world.World
-	players   map[string]*Player
-	roomItems map[string][]string
-	npcs      map[string]*NPCState
+	mtx         sync.Mutex
+	world       *world.World
+	players     map[string]*Player
+	roomItems   map[string][]string
+	npcs        map[string]*NPCState
+	nextGroupID int
 }
 
 func NewServer(w *world.World) *Server {
@@ -176,6 +178,8 @@ func (s *Server) handleConn(conn net.Conn) {
 			reply(s.cmdDefend(p, args))
 		case "FLEE":
 			reply(s.cmdFlee(p, args))
+		case "GROUP":
+			reply(s.cmdGroup(p, args))
 		default:
 			reply("ERR 400 BAD_REQUEST")
 		}
@@ -261,6 +265,12 @@ func (s *Server) unregister(p *Player) {
 		s.roomItems[p.Room] = append(s.roomItems[p.Room], p.Inventory...)
 		slog.Info("inventory dropped on disconnect", "player", p.Name, "room", p.Room, "items", p.Inventory)
 		p.Inventory = nil
+	}
+	if g := p.Group; g != nil {
+		g.Members = slices.DeleteFunc(g.Members, func(n string) bool {
+			return n == p.Name
+		})
+		s.pushGroupLocked(g, "EVT GROUP LEAVE "+p.Name)
 	}
 	s.pushRoomLocked(p.Room, "", "EVT ROOM PRESENCE LEAVE "+p.Name)
 	s.pushAllLocked(s.statsEventLocked())
