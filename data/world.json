@@ -120,7 +120,8 @@
     "npc.goblin": {
       "name": "Goblin",
       "description": "A hostile creature lurking in the dark alley.",
-      "dialogue": [],
+      "dialogue": ["Gnaaah! Fresh meat!", "Give me your gold... or your life!",
+      "Nobody will hear you scream in this alley...", "This alley is mine, traveler!"],
       "hp": 30,
       "hostile": true
     }
