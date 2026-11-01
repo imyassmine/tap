@@ -98,11 +98,9 @@ func main() {
 func (s *Server) handleConn(conn net.Conn) {
 	remote := conn.RemoteAddr().String()
 	name := ""
-	// p reste nil tant que CONNECT n'a pas réussi : toute autre commande est
-	// alors refusée, donc les cmdXxx reçoivent toujours un joueur enregistré.
 	var p *Player
 
-	out := make(chan string)
+	out := make(chan string, 64)
 	done := make(chan struct{})
 	go writeLoop(conn, remote, out, done)
 	reply := func(msg string) { out <- msg }
@@ -234,7 +232,6 @@ func (player *Player) push(msg string) {
 	}
 }
 
-// register renvoie le joueur créé, ou nil si le nom est déjà pris.
 func (s *Server) register(name string, out chan string) *Player {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
