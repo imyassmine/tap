@@ -48,8 +48,7 @@ func Load(path string) (*World, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = f.Close() }()
-
+	defer f.Close()
 	var w World
 	decoder := json.NewDecoder(f)
 	decoder.DisallowUnknownFields()
