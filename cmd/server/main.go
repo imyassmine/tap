@@ -101,7 +101,13 @@ func (s *Server) handleConn(conn net.Conn) {
 	wg.Go(func() {
 		writeLoop(conn, remote, ch)
 	})
-	reply := func(msg string) { ch <- msg }
+	reply := func(msg string) {
+		select {
+		case ch <- msg:
+		default:
+			slog.Warn("response channel full", "remote", remote)
+		}
+	}
 	slog.Info("client connected", "remote", remote)
 	defer func() {
 		s.unregister(p)
@@ -191,8 +197,6 @@ func writeLoop(conn net.Conn, remote string, ch <-chan string) {
 		if _, err := io.WriteString(conn, msg+"\n"); err != nil {
 			slog.Warn("send failed", "remote", remote, "error", err)
 			_ = conn.Close()
-			for range ch {
-			}
 			return
 		}
 		slog.Info("response sent", "remote", remote, "response", msg)
@@ -241,4 +245,3 @@ func (s *Server) unregister(p *Player) {
 	s.pushRoomLocked(p.Room, "", "EVT ROOM PRESENCE LEAVE "+p.Name)
 	s.pushAllLocked("EVT STATS players=" + strconv.Itoa(len(s.players)))
 }
-

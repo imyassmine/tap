@@ -1,9 +1,9 @@
 package main
 
 import (
+	"log/slog"
 	"strings"
 	"unicode"
-	"log/slog"
 )
 
 func (s *Server) cmdChat(p *Player, args string) string {
@@ -30,7 +30,6 @@ func (s *Server) cmdChat(p *Player, args string) string {
 	}
 	return "OK"
 }
-
 
 func cleanText(text string) string {
 	text = strings.Map(func(r rune) rune {
