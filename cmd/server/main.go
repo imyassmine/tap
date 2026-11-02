@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"tap/internal/world"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -75,7 +74,6 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("world loaded", "rooms", len(w.Rooms), "items", len(w.Items), "npcs", len(w.NPCs))
-
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		slog.Error("failed to start server", "port", port, "error", err)
@@ -83,7 +81,6 @@ func main() {
 	}
 	defer ln.Close()
 	slog.Info("server listening", "port", port)
-
 	srv := NewServer(w)
 	for {
 		conn, err := ln.Accept()
@@ -99,29 +96,24 @@ func (s *Server) handleConn(conn net.Conn) {
 	remote := conn.RemoteAddr().String()
 	name := ""
 	var p *Player
-
-	out := make(chan string, 64)
-	done := make(chan struct{})
-	go writeLoop(conn, remote, out, done)
-	reply := func(msg string) { out <- msg }
-
+	ch := make(chan string, 64) //channel bufferisé
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		writeLoop(conn, remote, ch)
+	})
+	reply := func(msg string) { ch <- msg }
 	slog.Info("client connected", "remote", remote)
 	defer func() {
-		if p != nil {
-			s.unregister(p)
-		}
-		close(out)
-		<-done
+		s.unregister(p)
+		close(ch)
+		wg.Wait()
 		_ = conn.Close()
 		slog.Info("client disconnected", "remote", remote, "player", name)
 	}()
-
 	reply(greeting)
-
 	scanner := bufio.NewScanner(conn)
 	buf := make([]byte, 0, maxLineSize)
 	scanner.Buffer(buf, maxLineSize)
-
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -133,20 +125,18 @@ func (s *Server) handleConn(conn net.Conn) {
 		args = strings.TrimSpace(args)
 		slog.Info("command received", "remote", remote, "player", name,
 			"command", command, "args", args)
-
 		if p == nil && command != "CONNECT" && command != "QUIT" {
 			reply("ERR 202 NOT_AUTHENTICATED")
 			continue
 		}
-
 		switch command {
 		case "CONNECT":
-			if p != nil || !validName(args) {
+			if p != nil || args == "" || !utf8.ValidString(args) {
 				reply("ERR 400 BAD_REQUEST")
-			} else if p = s.register(args, out); p == nil {
+			} else if p = s.register(args, ch); p == nil {
 				reply("ERR 201 NAME_IN_USE")
 			} else {
-				name = p.Name
+				name = cleanText(p.Name)
 				slog.Info("player connected", "remote", remote, "player", name)
 				reply("OK connected")
 				s.announceJoin(p)
@@ -196,43 +186,19 @@ func (s *Server) handleConn(conn net.Conn) {
 	}
 }
 
-func writeLoop(conn net.Conn, remote string, out <-chan string, done chan<- struct{}) {
-	defer close(done)
-	for msg := range out {
+func writeLoop(conn net.Conn, remote string, ch <-chan string) {
+	for msg := range ch {
 		if _, err := io.WriteString(conn, msg+"\n"); err != nil {
 			slog.Warn("send failed", "remote", remote, "error", err)
 			_ = conn.Close()
-			for range out {
+			for range ch {
 			}
-			return
 		}
 		slog.Info("response sent", "remote", remote, "response", msg)
 	}
 }
 
-func (s *Server) pushRoomLocked(roomID, except, msg string) {
-	for _, p := range s.players {
-		if p.Room == roomID && p.Name != except {
-			p.push(msg)
-		}
-	}
-}
-
-func (s *Server) pushAllLocked(msg string) {
-	for _, p := range s.players {
-		p.push(msg)
-	}
-}
-
-func (player *Player) push(msg string) {
-	select {
-	case player.out <- msg:
-	default:
-		slog.Warn("message dropped", "player", player.Name)
-	}
-}
-
-func (s *Server) register(name string, out chan string) *Player {
+func (s *Server) register(name string, ch chan string) *Player {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	if _, taken := s.players[name]; taken {
@@ -243,7 +209,7 @@ func (s *Server) register(name string, out chan string) *Player {
 		Room:  s.world.Start,
 		HP:    playerMaxHP,
 		MaxHP: playerMaxHP,
-		out:   out,
+		out:   ch,
 	}
 	s.players[name] = p
 	return p
@@ -275,14 +241,3 @@ func (s *Server) unregister(p *Player) {
 	s.pushAllLocked("EVT STATS players=" + strconv.Itoa(len(s.players)))
 }
 
-func validName(name string) bool {
-	if name == "" || !utf8.ValidString(name) {
-		return false
-	}
-	for _, r := range name {
-		if unicode.IsSpace(r) || unicode.IsControl(r) {
-			return false
-		}
-	}
-	return true
-}

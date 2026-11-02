@@ -3,17 +3,8 @@ package main
 import (
 	"strings"
 	"unicode"
+	"log/slog"
 )
-
-func cleanText(text string) string {
-	text = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, text)
-	return strings.TrimSpace(text)
-}
 
 func (s *Server) cmdChat(p *Player, args string) string {
 	scope, text, _ := strings.Cut(args, " ")
@@ -38,4 +29,37 @@ func (s *Server) cmdChat(p *Player, args string) string {
 		return "ERR 400 BAD_REQUEST"
 	}
 	return "OK"
+}
+
+
+func cleanText(text string) string {
+	text = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, text)
+	return strings.TrimSpace(text)
+}
+
+func (s *Server) pushAllLocked(msg string) {
+	for _, p := range s.players {
+		p.push(msg)
+	}
+}
+
+func (s *Server) pushRoomLocked(roomID, except, msg string) {
+	for _, p := range s.players {
+		if p.Room == roomID && p.Name != except {
+			p.push(msg)
+		}
+	}
+}
+
+func (player *Player) push(msg string) {
+	select {
+	case player.out <- msg:
+	default:
+		slog.Warn("message dropped", "player", player.Name)
+	}
 }
