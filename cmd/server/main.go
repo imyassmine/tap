@@ -193,6 +193,7 @@ func writeLoop(conn net.Conn, remote string, ch <-chan string) {
 			_ = conn.Close()
 			for range ch {
 			}
+			return
 		}
 		slog.Info("response sent", "remote", remote, "response", msg)
 	}
