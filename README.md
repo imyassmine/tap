@@ -1,4 +1,4 @@
-*This activity has been created as part of the 42 curriculum by hrezvani, yassabda*
+*This activity has been created as part of the 42 curriculum by hrezvani, yassabda.*
 
 # The Answer Protocol (TAP) - A Shared-World Retro Text Adventure
 
