@@ -37,7 +37,7 @@ func main() {
 			fmt.Println("Send error:", err)
 			break
 		}
-		
+
 		if strings.EqualFold(strings.TrimSpace(text), "QUIT") {
 			break
 		}

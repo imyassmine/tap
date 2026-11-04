@@ -96,7 +96,7 @@ func (world *World) Validate() error {
 		}
 		if quest.Reward != "" {
 			if _, ok := world.Items[quest.Reward]; !ok {
-				errs = append(errs, errors.New("quest: reward does not exist",))
+				errs = append(errs, errors.New("quest: reward does not exist"))
 			}
 		}
 	}
