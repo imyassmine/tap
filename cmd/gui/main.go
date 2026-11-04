@@ -49,7 +49,7 @@ func main() {
 				<button onclick="sendCmd('WHO')">WHO</button>
 				<button onclick="sendCmd('STATUS')">STATUS</button>
 				<button onclick="sendCmd('QUESTS')">QUESTS</button>
-				<button onclick="sendCmd('GROUP')">GROUP</button>
+				<button onclick="sendCmd('GROUP CREATE')">GROUP</button>
 				<button onclick="sendCmd('QUIT')">QUIT</button>
 				<br>
 				<button onclick="sendCmd('MOVE north')">North</button>
