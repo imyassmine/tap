@@ -88,5 +88,17 @@ func (world *World) Validate() error {
 			errs = append(errs, errors.New("NPC has no dialogue"))
 		}
 	}
+	for _, quest := range world.Quests {
+		_, isItem := world.Items[quest.Target]
+		_, isNPC := world.NPCs[quest.Target]
+		if !isItem && !isNPC {
+			errs = append(errs, errors.New("quest: target does not exist"))
+		}
+		if quest.Reward != "" {
+			if _, ok := world.Items[quest.Reward]; !ok {
+				errs = append(errs, errors.New("quest: reward does not exist",))
+			}
+		}
+	}
 	return errors.Join(errs...)
 }

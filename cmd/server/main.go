@@ -110,7 +110,9 @@ func (s *Server) handleConn(conn net.Conn) {
 	}
 	slog.Info("client connected", "remote", remote)
 	defer func() {
-		s.unregister(p)
+		if p != nil {
+			s.unregister(p)
+		}
 		close(ch)
 		wg.Wait()
 		_ = conn.Close()
