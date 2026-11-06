@@ -26,7 +26,13 @@ func (s *Server) cmdStatus(p *Player, args string) string {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	return fmt.Sprintf("OK {\"hp\": %d, \"max_hp\": %d, \"defending\": %t}", p.HP, p.MaxHP, p.IsDefending)
+	status := "healthy"
+	if p.IsDefending {
+		status = "defending"
+	} else if p.HP < p.MaxHP {
+		status = "wounded"
+	}
+	return fmt.Sprintf("OK {\"hp\": %d, \"max_hp\": %d, \"status\": %q}", p.HP, p.MaxHP, status)
 }
 
 func (s *Server) cmdDefend(p *Player, args string) string {
@@ -49,7 +55,8 @@ func (s *Server) cmdAttack(p *Player, args string) string {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	room := s.world.Rooms[p.Room]
+	fightRoom := p.Room
+	room := s.world.Rooms[fightRoom]
 	for _, id := range room.NPCs {
 		state, ok := s.npcs[id]
 		if !ok || !state.Alive || !matchRef(args, id, s.world.NPCs[id].Name) {
@@ -101,6 +108,12 @@ func (s *Server) cmdAttack(p *Player, args string) string {
 		if err != nil {
 			slog.Error("attack response marshal failed", "player", p.Name, "npc", id, "error", err)
 			return "ERR 500 INTERNAL_ERROR"
+		}
+		s.pushRoomLocked(fightRoom, p.Name, fmt.Sprintf("EVT ROOM COMBAT %s %s %d %d %s",
+			p.Name, id, damageToNPC, state.HP, status))
+		if status == "defeated" && fightRoom != s.world.Start {
+			s.pushRoomLocked(fightRoom, p.Name, "EVT ROOM PRESENCE LEAVE "+p.Name)
+			s.pushRoomLocked(s.world.Start, p.Name, "EVT ROOM PRESENCE ENTER "+p.Name)
 		}
 
 		slog.Info("combat attack", "player", p.Name, "npc", id, "damage", damageToNPC, "target_hp", state.HP, "attacker_hp", p.HP)
